@@ -1,12 +1,6 @@
-# === Librairies pour Exchange (Outlook Pro) ===
-exchangelib==5.2.1
-pytz==2024.1
-
-# === Librairies pour Google Calendar API ===
-google-api-python-client==2.151.0
-google-auth==2.36.0
-google-auth-oauthlib==1.2.1
-google-auth-httplib2==0.2.0
-
-# === Librairies pour env ===
-python-dotenv==1.2.1
+exchangelib==4.9.0
+google-api-python-client==2.70.0
+google-auth-httplib2==0.1.0
+google-auth-oauthlib==1.0.0
+pytz==2022.7.1
+python-dotenv==1.0.0

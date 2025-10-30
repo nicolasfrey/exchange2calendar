@@ -8,7 +8,9 @@ import sys
 
 # Import du module à tester
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
-from exchange_sync import clean_subject, get_exchange_uid, normalize_str, to_utc_datetime, datetimes_equal, parse_google_start, to_py_datetime
+from src.exchange_service import clean_subject
+from src.google_service import get_exchange_uid
+from src.utils.datetime_utils import normalize_str, to_utc_datetime, datetimes_equal, parse_google_start, to_py_datetime
 
 class TestExchangeSync(unittest.TestCase):
 
@@ -106,26 +108,6 @@ class TestExchangeSync(unittest.TestCase):
         self.assertIsNone(parse_google_start({'start': {}}))
 
     def test_to_py_datetime(self):
-        # Mock pour simuler EWSDateTime sans utiliser patch
-        class MockEWSDateTime:
-            def __init__(self):
-                self.year = 2023
-                self.month = 6
-                self.day = 15
-                self.hour = 10
-                self.minute = 0
-                self.second = 0
-                self.tzinfo = None
-
-            def replace(self, **kwargs):
-                # Simuler la méthode replace
-                return datetime(self.year, self.month, self.day,
-                               self.hour, self.minute, self.second,
-                               tzinfo=kwargs.get('tzinfo'))
-
-            def astimezone(self, tz):
-                raise Exception("Erreur de conversion")
-
         # Test avec une date simple
         d = date(2023, 6, 15)
         dt = to_py_datetime(d)
@@ -133,7 +115,7 @@ class TestExchangeSync(unittest.TestCase):
         self.assertEqual(dt.time(), time(0, 0))
         # Vérification de l'attribut tzinfo différemment pour gérer pytz.UTC et timezone.utc
         self.assertTrue(dt.tzinfo is not None)
-        self.assertEqual(dt.tzname(), 'UTC')  # Les deux types de timezone ont le même nom
+        self.assertEqual(dt.tzname(), 'UTC')
 
         # Test avec datetime Python
         dt_py = datetime(2023, 6, 15, 10, 0, tzinfo=timezone.utc)
