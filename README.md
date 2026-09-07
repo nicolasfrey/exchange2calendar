@@ -11,8 +11,13 @@ Ce projet permet de **synchroniser automatiquement les événements du calendrie
 - 🗑️ **Suppression des événements** qui n'existent plus dans Exchange
 - 🕒 **Gestion des fuseaux horaires**
 - 📅 **Support des événements sur la journée entière**
-- 🔍 **Mode simulation** pour tester sans modifier le calendrier Google
+- ⛔ **Filtrage des réunions annulées** : elles ne sont pas poussées, et leur
+  copie Google est supprimée. Les réunions que vous avez *refusées* sont en
+  revanche conservées, pour garder la visibilité sur ce qui se passe sans vous.
+- 🔍 **Mode simulation** (`--dry-run`) : calcule le diff réel sans rien écrire
 - 🔔 **Notifications de bureau** en cas d'erreur
+- 🧱 **Résilience** : réessai des lectures réseau, cache de l'endpoint EWS,
+  verrou anti-recouvrement, rotation du journal
 
 ---
 
@@ -136,6 +141,7 @@ Cette configuration lance la synchronisation à la 2ème minute de chaque heure 
 - `src/exchange_service.py` - Lecture Exchange, clé de synchro, cache d'endpoint
 - `src/google_service.py` - Authentification Google Calendar
 - `src/utils/retry_utils.py` - Réessai des erreurs réseau transitoires
+- `src/utils/logging_utils.py` - Journal horodaté (une date et un niveau par ligne)
 - `test_*.py` / `test_run_sync.sh` - Tests unitaires
 - `run_sync.sh` - Script d'automatisation (verrou + rotation du journal)
 - `.exchange_endpoint.json` - Endpoint EWS mémorisé (généré, ignoré par git)
@@ -145,6 +151,23 @@ Cette configuration lance la synchronisation à la 2ème minute de chaque heure 
 - `GOOGLE_SETUP.md` - Guide de configuration de l'API Google Calendar
 - `.env.sample` - Modèle pour le fichier de configuration
 - `notify.py` - Module de notifications de bureau (optionnel)
+
+---
+
+## 📖 Lecture du journal
+
+Chaque ligne de `sync.log` porte sa date et son niveau :
+
+```
+2026-09-07 12:30:57 INFO    ➖ Supprimé : Annulé: Réunion (2026-09-14)
+2026-09-07 12:30:58 INFO    ✅ Synchronisation terminée : 0 créés, 0 mis à jour, 1 supprimés.
+```
+
+Les bibliothèques tierces (googleapiclient, urllib3, exchangelib) sont limitées
+au niveau `WARNING` : leurs messages d'information noieraient le journal.
+
+Le fichier tourne à 5 Mo sur 5 générations (`sync.log.1` … `sync.log.5`) ;
+`MAX_LOG_BYTES` et `LOG_GENERATIONS` permettent de les ajuster.
 
 ---
 

@@ -1,5 +1,6 @@
 """Fonctions utilitaires pour l'intégration avec healthchecks.io."""
 
+import logging
 import os
 from typing import Optional, Union
 
@@ -7,6 +8,8 @@ import requests
 import urllib3
 
 from src.utils.retry_utils import retry_call
+
+logger = logging.getLogger(__name__)
 
 PING_TIMEOUT = 10
 
@@ -42,13 +45,13 @@ def send_healthcheck_ping(status: Optional[str] = None, message: Optional[str] =
     healthcheck_url = os.getenv("HEALTHCHECK_URL")
 
     if not healthcheck_url:
-        print("❌ HEALTHCHECK_URL n'est pas définie dans les variables d'environnement")
+        logger.error("❌ HEALTHCHECK_URL n'est pas définie dans les variables d'environnement")
         return False
 
     verify = resolve_ssl_verify()
 
     if verify is False:
-        print("⚠️ Vérification SSL désactivée pour les requêtes healthchecks.io")
+        logger.warning("⚠️ Vérification SSL désactivée pour les requêtes healthchecks.io")
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
     # Le statut n'est ajouté à l'URL que pour 'start' et 'fail' ; 'success'
@@ -66,20 +69,20 @@ def send_healthcheck_ping(status: Optional[str] = None, message: Optional[str] =
         response = retry_call(ping, label=f"ping healthcheck ({status or 'standard'})")
 
         if response.status_code != 200:
-            print(f"❌ Erreur lors de l'envoi du ping healthcheck ({status}): "
+            logger.error(f"❌ Erreur lors de l'envoi du ping healthcheck ({status}): "
                   f"Code HTTP {response.status_code}")
-            print(f"Réponse: {response.text}")
+            logger.info(f"Réponse: {response.text}")
         else:
-            print(f"✅ Ping healthcheck envoyé avec succès ({status or 'standard'})")
+            logger.info(f"✅ Ping healthcheck envoyé avec succès ({status or 'standard'})")
 
         return response.status_code == 200
     except requests.RequestException as e:
-        print(f"❌ Exception lors de l'envoi du ping healthcheck ({status}): "
+        logger.error(f"❌ Exception lors de l'envoi du ping healthcheck ({status}): "
               f"{type(e).__name__}: {str(e)}")
 
         if isinstance(e, requests.ConnectionError):
-            print("  → Vérifiez votre connexion internet ou l'URL du healthcheck")
+            logger.info("  → Vérifiez votre connexion internet ou l'URL du healthcheck")
         elif isinstance(e, requests.Timeout):
-            print("  → Le délai d'attente a été dépassé lors de la connexion au serveur")
+            logger.info("  → Le délai d'attente a été dépassé lors de la connexion au serveur")
 
         return False

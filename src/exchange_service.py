@@ -1,9 +1,10 @@
 """Service d'interaction avec Exchange/Outlook."""
 
+import datetime
 import json
+import logging
 import os
 import re
-import datetime
 from typing import Any, Dict, List, Optional
 
 import pytz
@@ -11,6 +12,8 @@ from exchangelib import Configuration, Credentials, Account, DELEGATE
 
 from src.utils.datetime_utils import to_py_datetime
 from src.utils.retry_utils import retry_call
+
+logger = logging.getLogger(__name__)
 
 # L'autodiscover est lent et c'est le point de défaillance le plus fréquent des
 # runs (« All steps in the autodiscover protocol failed »). On mémorise l'endpoint
@@ -74,13 +77,13 @@ class ExchangeCalendarService:
         if cached:
             try:
                 self.account = self._connect_to_endpoint(credentials, cached)
-                print(f"✅ Connecté à Exchange : {self.account.primary_smtp_address} "
+                logger.info(f"✅ Connecté à Exchange : {self.account.primary_smtp_address} "
                       f"(endpoint en cache)")
                 return True
             except Exception as e:
                 # Un endpoint mémorisé peut devenir obsolète (migration de
                 # serveur) : on l'oublie et on repasse par l'autodiscover.
-                print(f"⚠️ Endpoint Exchange en cache inutilisable "
+                logger.warning(f"⚠️ Endpoint Exchange en cache inutilisable "
                       f"({type(e).__name__}), retour à l'autodiscover")
                 self._forget_cached_endpoint()
 
@@ -88,11 +91,11 @@ class ExchangeCalendarService:
             self.account = retry_call(
                 lambda: self._connect_with_autodiscover(credentials),
                 label="connexion Exchange (autodiscover)")
-            print(f"✅ Connecté à Exchange : {self.account.primary_smtp_address}")
+            logger.info(f"✅ Connecté à Exchange : {self.account.primary_smtp_address}")
             self._save_endpoint()
             return True
         except Exception as e:
-            print(f"❌ Erreur de connexion Exchange : {e}")
+            logger.error(f"❌ Erreur de connexion Exchange : {e}")
             return False
 
     def _connect_with_autodiscover(self, credentials: Credentials) -> Account:
@@ -139,7 +142,7 @@ class ExchangeCalendarService:
                 json.dump(payload, fh)
         except Exception as e:
             # Le cache est une optimisation : son échec ne doit rien casser.
-            print(f"⚠️ Impossible de mémoriser l'endpoint Exchange : {e}")
+            logger.warning(f"⚠️ Impossible de mémoriser l'endpoint Exchange : {e}")
 
     def _forget_cached_endpoint(self) -> None:
         try:
@@ -160,6 +163,13 @@ class ExchangeCalendarService:
             label="lecture du calendrier Exchange")
 
         for item in items:
+            # Une réunion annulée reste dans le calendrier Exchange (préfixée
+            # « Annulé: ») mais n'a pas à occuper le calendrier Google. Les
+            # réunions refusées, elles, sont conservées : c'est utile de voir ce
+            # qui se passe sans nous.
+            if getattr(item, 'is_cancelled', False):
+                continue
+
             all_day = isinstance(item.start, datetime.date) and not isinstance(item.start, datetime.datetime)
 
             start_dt = to_py_datetime(item.start)

@@ -7,9 +7,11 @@ vers un calendrier Google Calendar, en créant de nouveaux événements, en mett
 ceux qui ont été modifiés, et en supprimant ceux qui ont été supprimés côté Exchange.
 """
 
+import argparse
+import logging
 import os
 import sys
-import argparse
+
 from dotenv import load_dotenv
 
 # Import des modules du projet
@@ -18,10 +20,15 @@ from src.google_service import GoogleCalendarService
 from src.synchronizer import CalendarSynchronizer
 from src.utils.notification_utils import notify_error, format_exception
 from src.utils.healthchecks_utils import send_healthcheck_ping
+from src.utils.logging_utils import configure_logging
+
+logger = logging.getLogger(__name__)
 
 
 def main():
     """Point d'entrée principal de l'application."""
+    configure_logging()
+
     # Chargement des variables d'environnement
     load_dotenv()
 
@@ -59,8 +66,8 @@ def main():
         # Validation des variables d'environnement obligatoires
         if not all([username, password, email, google_calendar_id]):
             error_msg = "Configuration incomplète dans le fichier .env"
-            print(f"❌ Erreur : {error_msg}")
-            print("!!!Veuillez définir EXCHANGE_USERNAME, EXCHANGE_EMAIL, EXCHANGE_PASSWORD et GOOGLE_CALENDAR_ID")
+            logger.error(f"❌ Erreur : {error_msg}")
+            logger.info("!!!Veuillez définir EXCHANGE_USERNAME, EXCHANGE_EMAIL, EXCHANGE_PASSWORD et GOOGLE_CALENDAR_ID")
 
             if enable_notifications:
                 notify_error(error_msg)
@@ -89,15 +96,15 @@ def main():
             sys.exit(1)
 
         # Connexion à Google Calendar
-        print("\n Connexion à Google Calendar...")
+        logger.info("Connexion à Google Calendar...")
         try:
             google_service = GoogleCalendarService.authenticate()
         except Exception as e:
             error_msg = "Erreur d'authentification Google Calendar"
             error_details = format_exception(e)
-            print(f"\n❌ {error_msg}")
-            print(f"\nDétails: {error_details}")
-            print("\nConseil: Supprimez le fichier token.json et réessayez pour vous authentifier à nouveau.")
+            logger.error(f"❌ {error_msg}")
+            logger.info(f"Détails: {error_details}")
+            logger.info("Conseil: Supprimez le fichier token.json et réessayez pour vous authentifier à nouveau.")
 
             if enable_notifications:
                 notify_error(error_msg, "Token expiré ou révoqué. Supprimez token.json et réessayez.")
@@ -126,8 +133,8 @@ def main():
         error_message = f"Erreur lors de la synchronisation: {str(e)}"
         error_details = format_exception(e)
 
-        print(f"\n❌ {error_message}")
-        print(f"\nDétails: {error_details}")
+        logger.error(f"❌ {error_message}")
+        logger.info(f"Détails: {error_details}")
 
         # Envoyer notification de bureau
         if enable_notifications:

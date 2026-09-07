@@ -1,5 +1,6 @@
 """Service d'interaction avec l'API Google Calendar."""
 
+import logging
 import os
 from typing import Any
 from googleapiclient.discovery import build
@@ -8,6 +9,8 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 
 from src.utils.retry_utils import retry_call
+
+logger = logging.getLogger(__name__)
 
 
 def get_exchange_uid(event: dict) -> str:

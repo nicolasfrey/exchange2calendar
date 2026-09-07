@@ -1,7 +1,10 @@
 """Réessai des opérations réseau transitoires."""
 
+import logging
 import time
 from typing import Any, Callable, Iterable, Optional, Tuple, Type
+
+logger = logging.getLogger(__name__)
 
 # Erreurs observées dans sync.log au réveil de la machine : résolution DNS,
 # autodiscover Exchange, lecture qui expire, interruption TLS.
@@ -48,7 +51,7 @@ def retry_call(operation: Callable[[], Any], *,
             if on_retry:
                 on_retry(attempt, delay, error)
             else:
-                print(f"⏳ {label} : échec ({type(error).__name__}), "
+                logger.warning(f"⏳ {label} : échec ({type(error).__name__}), "
                       f"nouvelle tentative dans {delay:.0f}s "
                       f"({attempt}/{attempts - 1})")
 

@@ -451,6 +451,20 @@ class TestDeletionWindow(unittest.TestCase):
         self.assertEqual((window_start.hour, window_start.minute), (0, 0))
 
 
+class TestCancelledMeetingCleanup(unittest.TestCase):
+
+    def test_a_meeting_cancelled_after_sync_is_removed_from_google(self):
+        now = TZ.localize(datetime.datetime(2026, 9, 9, 10, 2)).astimezone(pytz.UTC)
+        start = now + datetime.timedelta(days=5)
+        # Exchange ne la renvoie plus (filtrée car annulée) mais Google l'a encore.
+        stale = google_timed('UID-ANNULEE', start, subject="Annulé: Réunion", eid='annulee')
+
+        google, _, (created, updated, deleted) = run_sync([], [stale], now)
+
+        self.assertNotIn('annulee', google.store)
+        self.assertEqual(deleted, 1)
+
+
 class TestGoogleReadRetries(unittest.TestCase):
 
     def test_a_transient_failure_while_listing_is_retried(self):
