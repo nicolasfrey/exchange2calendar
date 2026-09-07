@@ -25,7 +25,24 @@ de se connecter à l’API Google Calendar via OAuth2.
 
 ---
 
-## 🔑 3. Créer des identifiants OAuth 2.0
+## 🪪 3. Configurer l'écran de consentement OAuth
+
+Google exige cette étape **avant** de pouvoir créer un identifiant.
+
+1. Dans le menu latéral : **API et services → Écran de consentement OAuth**
+2. Type d'utilisateur : **Externe** (ou **Interne** si votre organisation le permet)
+3. Renseignez le nom de l'application et votre adresse e-mail de contact.
+4. Ajoutez votre propre compte Google dans **Utilisateurs de test**.
+
+> ⚠️ **Statut de publication.** Laissé en **« Test »**, le jeton de
+> rafraîchissement expire au bout de **7 jours** : il faudrait réautoriser
+> l'application chaque semaine, et la synchronisation s'arrêterait entre-temps.
+> Passez le projet en **« Production »** (ou utilisez le type **« Interne »**)
+> pour obtenir un jeton durable.
+
+---
+
+## 🔑 4. Créer des identifiants OAuth 2.0
 
 1. Dans le menu latéral, allez dans :  
    **API et services → Identifiants**
@@ -37,7 +54,7 @@ de se connecter à l’API Google Calendar via OAuth2.
 
 ---
 
-## 💾 4. Télécharger le fichier `credentials.json`
+## 💾 5. Télécharger le fichier `credentials.json`
 
 Une fois la clé créée :
 1. Cliquez sur le bouton **Télécharger le fichier JSON** à droite de la clé créée.
@@ -51,16 +68,21 @@ Une fois la clé créée :
 
 ---
 
-## 🧠 5. Premier lancement du script
+## 🧠 6. Premier lancement du script
 
-Lors du premier lancement :
+⚠️ **À faire à la main, dans un terminal** — pas via le cron : cette étape ouvre
+un navigateur, et sous cron le script resterait bloqué à l'attendre.
+
 ```bash
+source venv/bin/activate
 python3 exchange_sync.py
 ```
 
-Une fenêtre de navigateur va s’ouvrir pour vous demander de :
+Une fenêtre de navigateur va s'ouvrir pour vous demander de :
 - Vous connecter à votre compte Google
-- Autoriser l’accès à Google Calendar
+- Autoriser l'accès à Google Calendar
 
-Le script créera automatiquement un fichier : token.json.
-Ce fichier stocke le jeton d’accès OAuth, pour éviter de devoir se reconnecter à chaque fois.
+Le script créera automatiquement un fichier `token.json`, qui stocke le jeton
+OAuth et évite de devoir se reconnecter à chaque exécution. Il est rafraîchi
+automatiquement par la suite ; s'il devient invalide, supprimez-le et relancez
+cette même étape à la main.
