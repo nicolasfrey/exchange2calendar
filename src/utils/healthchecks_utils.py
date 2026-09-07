@@ -1,62 +1,82 @@
 """Fonctions utilitaires pour l'intégration avec healthchecks.io."""
 
 import os
+from typing import Optional, Union
+
 import requests
-from typing import Optional
+import urllib3
+
+from src.utils.retry_utils import retry_call
+
+PING_TIMEOUT = 10
+
+
+def resolve_ssl_verify() -> Union[bool, str]:
+    """Détermine la valeur `verify` à passer à requests.
+
+    Le réseau de l'entreprise passe par un pare-feu Fortinet qui réémet les
+    certificats TLS. Sa CA est présente dans le magasin système, mais `requests`
+    utilise par défaut le bundle embarqué de certifi, qui ne la contient pas :
+    d'où les SSLError. Renseigner `CA_BUNDLE` (ex.
+    /etc/ssl/certs/ca-certificates.crt) permet de garder la vérification ACTIVE.
+
+    `VERIFY_SSL=false` reste disponible comme échappatoire et prime sur tout.
+    """
+    if os.getenv("VERIFY_SSL", "true").lower() == "false":
+        return False
+
+    return os.getenv("CA_BUNDLE") or True
 
 
 def send_healthcheck_ping(status: Optional[str] = None, message: Optional[str] = None) -> bool:
     """
     Envoie un ping à healthchecks.io.
-    
+
     Args:
         status: État du ping ('start', 'success', 'fail', None pour un ping standard)
         message: Message à inclure avec le ping (uniquement pour les échecs)
-        
+
     Returns:
         bool: True si le ping a été envoyé avec succès, False sinon
     """
     healthcheck_url = os.getenv("HEALTHCHECK_URL")
-    
+
     if not healthcheck_url:
         print("❌ HEALTHCHECK_URL n'est pas définie dans les variables d'environnement")
         return False
 
-    # Vérifier si la vérification SSL doit être désactivée
-    verify_ssl = os.getenv("VERIFY_SSL", "true").lower() != "false"
+    verify = resolve_ssl_verify()
 
-    if not verify_ssl:
+    if verify is False:
         print("⚠️ Vérification SSL désactivée pour les requêtes healthchecks.io")
-        # Supprimer les avertissements de sécurité si la vérification SSL est désactivée
-        requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-    # Construire l'URL complète avec le statut si fourni
-    url = healthcheck_url
-    # Ajouter le statut à l'URL uniquement pour 'start' et 'fail'
-    if status and status in ['start', 'fail']:
-        url = f"{healthcheck_url}/{status}"
-    # Pour 'success', on utilise l'URL de base sans suffixe
+    # Le statut n'est ajouté à l'URL que pour 'start' et 'fail' ; 'success'
+    # utilise l'URL de base.
+    url = f"{healthcheck_url}/{status}" if status in ('start', 'fail') else healthcheck_url
+
+    def ping():
+        if message and status in ("fail", "success"):
+            return requests.post(url, data=message.encode('utf-8'),
+                                 timeout=PING_TIMEOUT, verify=verify)
+        return requests.get(url, timeout=PING_TIMEOUT, verify=verify)
 
     try:
-        # Ajouter le message en cas d'échec ou de succès
-        if message and (status == "fail" or status == "success"):
-            response = requests.post(url, data=message.encode('utf-8'), timeout=10, verify=verify_ssl)
-        else:
-            print(f"url: {url}")
-            response = requests.get(url, timeout=10, verify=verify_ssl)
+        # Idempotent : un ping rejoué ne fait qu'écraser le même état.
+        response = retry_call(ping, label=f"ping healthcheck ({status or 'standard'})")
 
         if response.status_code != 200:
-            print(f"❌ Erreur lors de l'envoi du ping healthcheck ({status}): Code HTTP {response.status_code}")
+            print(f"❌ Erreur lors de l'envoi du ping healthcheck ({status}): "
+                  f"Code HTTP {response.status_code}")
             print(f"Réponse: {response.text}")
         else:
             print(f"✅ Ping healthcheck envoyé avec succès ({status or 'standard'})")
 
         return response.status_code == 200
     except requests.RequestException as e:
-        # Afficher l'erreur pour faciliter le débogage
-        print(f"❌ Exception lors de l'envoi du ping healthcheck ({status}): {type(e).__name__}: {str(e)}")
+        print(f"❌ Exception lors de l'envoi du ping healthcheck ({status}): "
+              f"{type(e).__name__}: {str(e)}")
 
-        # Si c'est une erreur de connexion, afficher plus de détails
         if isinstance(e, requests.ConnectionError):
             print("  → Vérifiez votre connexion internet ou l'URL du healthcheck")
         elif isinstance(e, requests.Timeout):

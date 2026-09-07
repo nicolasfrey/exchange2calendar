@@ -7,11 +7,21 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 
+from src.utils.retry_utils import retry_call
+
 
 def get_exchange_uid(event: dict) -> str:
-    """Récupère l'UID Exchange stocké dans les propriétés privées Google."""
+    """Récupère l'UID Exchange stocké dans les propriétés privées Google.
+
+    Renvoie une chaîne vide pour tout événement qui ne vient pas de la synchro :
+    c'est ce qui protège les événements créés à la main dans le calendrier. Un
+    repli sur `description` leur attribuerait un UID inconnu d'Exchange, et la
+    passe de nettoyage les supprimerait.
+    """
     try:
-        return event.get('extendedProperties', {}).get('private', {}).get('exchange_uid', '') or event.get('description', '')
+        properties = event.get('extendedProperties') or {}
+        private = properties.get('private') or {}
+        return private.get('exchange_uid') or ''
     except Exception:
         return ''
 
@@ -42,4 +52,8 @@ class GoogleCalendarService:
             with open('token.json', 'w') as token:
                 token.write(creds.to_json())
 
-        return build('calendar', 'v3', credentials=creds)
+        # `build` résout le document de découverte : c'est un appel réseau, et
+        # il échoue au réveil de la machine (« Unable to find the server at
+        # www.googleapis.com »). Idempotent, donc réessayable.
+        return retry_call(lambda: build('calendar', 'v3', credentials=creds),
+                          label="connexion à l'API Google Calendar")

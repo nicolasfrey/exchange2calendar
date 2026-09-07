@@ -32,9 +32,10 @@ class TestExchangeSync(unittest.TestCase):
         }
         self.assertEqual(get_exchange_uid(event), '12345')
 
-        # Test avec description comme fallback
+        # Un événement non géré par la synchro (créé à la main) n'a PAS d'UID :
+        # se replier sur `description` le rendrait éligible à la suppression.
         event = {'description': 'abc123'}
-        self.assertEqual(get_exchange_uid(event), 'abc123')
+        self.assertEqual(get_exchange_uid(event), '')
 
         # Test sans propriétés
         event = {}
