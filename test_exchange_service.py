@@ -27,13 +27,15 @@ class FakeItem:
 
     def __init__(self, start, end, subject="Réunion", item_id="AAA",
                  uid="040000008200E00074C5B7101A82E008", location="",
-                 body="", organizer="a@b.c", recurrence_id=None):
+                 body="", organizer="a@b.c", recurrence_id=None,
+                 is_cancelled=False):
         self.start = start
         self.end = end
         self.subject = subject
         self.id = item_id
         self.uid = uid
         self.recurrence_id = recurrence_id
+        self.is_cancelled = is_cancelled
         self.location = location
         self.text_body = body
         self.organizer = FakeOrganizer(organizer)
@@ -105,6 +107,41 @@ class TestAllDayEndIsExclusive(unittest.TestCase):
 
         self.assertFalse(event['all_day'])
         self.assertEqual(event['end'], datetime.datetime(2026, 9, 7, 9, 0, tzinfo=pytz.UTC))
+
+
+class TestCancelledMeetings(unittest.TestCase):
+    """Une réunion annulée côté Exchange n'a pas à occuper le calendrier."""
+
+    def test_a_cancelled_meeting_is_not_returned(self):
+        utc = EWSTimeZone('UTC')
+        cancelled = FakeItem(start=EWSDateTime(2026, 9, 14, 8, 0, tzinfo=utc),
+                             end=EWSDateTime(2026, 9, 14, 9, 0, tzinfo=utc),
+                             subject="Annulé: Suivi, pilotage et coordination de projets",
+                             is_cancelled=True)
+
+        events = build_service([cancelled]).get_events(WINDOW_START, WINDOW_END)
+
+        self.assertEqual(events, [])
+
+    def test_an_active_meeting_is_still_returned(self):
+        utc = EWSTimeZone('UTC')
+        active = FakeItem(start=EWSDateTime(2026, 9, 14, 8, 0, tzinfo=utc),
+                          end=EWSDateTime(2026, 9, 14, 9, 0, tzinfo=utc))
+
+        events = build_service([active]).get_events(WINDOW_START, WINDOW_END)
+
+        self.assertEqual(len(events), 1)
+
+    def test_a_declined_meeting_is_kept(self):
+        # Décision produit : on garde la visibilité sur ce qui se passe sans nous.
+        utc = EWSTimeZone('UTC')
+        declined = FakeItem(start=EWSDateTime(2026, 9, 14, 8, 0, tzinfo=utc),
+                            end=EWSDateTime(2026, 9, 14, 9, 0, tzinfo=utc))
+        declined.my_response_type = 'Decline'
+
+        events = build_service([declined]).get_events(WINDOW_START, WINDOW_END)
+
+        self.assertEqual(len(events), 1)
 
 
 class TestStableSyncKey(unittest.TestCase):

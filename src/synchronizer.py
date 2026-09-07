@@ -1,6 +1,7 @@
 """Gestion de la synchronisation entre Exchange et Google Calendar."""
 
 import datetime
+import logging
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 import pytz
@@ -10,6 +11,8 @@ from src.utils.datetime_utils import (
 )
 from src.google_service import get_exchange_uid
 from src.utils.retry_utils import retry_call
+
+logger = logging.getLogger(__name__)
 
 # Fenêtre de rattrapage en amont : on interroge Google un peu plus tôt qu'Exchange
 # afin de voir (et réparer/dédoublonner) les événements laissés par les runs passés.
@@ -54,15 +57,15 @@ class CalendarSynchronizer:
         window_start = self._start_of_local_day(now)
         window_end = now + datetime.timedelta(days=days_ahead)
 
-        print(f"📥 Lecture des événements Outlook du {window_start.date()} au {window_end.date()}...")
+        logger.info(f"📥 Lecture des événements Outlook du {window_start.date()} au {window_end.date()}...")
 
         outlook_events = self.exchange_service.get_events(window_start, window_end)
         self._display_events_summary(outlook_events)
 
         if dry_run:
-            print("\n🔎 Mode simulation (--dry-run). Aucun changement ne sera appliqué.")
+            logger.info("🔎 Mode simulation (--dry-run). Aucun changement ne sera appliqué.")
 
-        print("\n🔗 Connexion à Google Calendar...")
+        logger.info("🔗 Connexion à Google Calendar...")
 
         google_events = self._list_google_events(
             window_start - datetime.timedelta(days=self.lookback_days), window_end)
@@ -73,7 +76,7 @@ class CalendarSynchronizer:
         created, updated, deleted = self._process_events(
             outlook_events, google_index, duplicates, exchange_uids, window_start, dry_run)
 
-        print(f"\n✅ Synchronisation terminée : {created} créés, {updated} mis à jour, {deleted} supprimés.")
+        logger.info(f"✅ Synchronisation terminée : {created} créés, {updated} mis à jour, {deleted} supprimés.")
         return created, updated, deleted
 
     def _start_of_local_day(self, moment: datetime.datetime) -> datetime.datetime:
@@ -168,7 +171,7 @@ class CalendarSynchronizer:
                     changes.append("clé")
 
                 if changes:
-                    print(f"🔁 Mise à jour ({', '.join(changes)}): {ev['subject']}")
+                    logger.info(f"🔁 Mise à jour ({', '.join(changes)}): {ev['subject']}")
                     if not dry_run:
                         self.google_service.events().update(
                             calendarId=self.calendar_id,
@@ -177,7 +180,7 @@ class CalendarSynchronizer:
                         ).execute()
                     updated += 1
             else:
-                print(f"➕ Nouveau : {ev['subject']}")
+                logger.info(f"➕ Nouveau : {ev['subject']}")
                 if not dry_run:
                     self.google_service.events().insert(
                         calendarId=self.calendar_id,
@@ -187,7 +190,7 @@ class CalendarSynchronizer:
 
         # Suppression des doublons accumulés par les runs passés
         for g_ev in duplicates:
-            print(f"➖ Doublon supprimé : {g_ev.get('summary')}")
+            logger.info(f"➖ Doublon supprimé : {g_ev.get('summary')}")
             if self._delete(g_ev, dry_run):
                 deleted += 1
 
@@ -203,7 +206,7 @@ class CalendarSynchronizer:
             if start_dt < window_start:
                 continue
 
-            print(f"➖ Supprimé : {g_ev.get('summary')} ({start_dt.date()})")
+            logger.info(f"➖ Supprimé : {g_ev.get('summary')} ({start_dt.date()})")
             if self._delete(g_ev, dry_run):
                 deleted += 1
 
@@ -238,7 +241,7 @@ class CalendarSynchronizer:
             ).execute()
             return True
         except Exception as e:
-            print(f"⚠️ Erreur suppression {google_event.get('id')}: {e}")
+            logger.warning(f"⚠️ Erreur suppression {google_event.get('id')}: {e}")
             return False
 
     def _prepare_google_event(self, exchange_event: Dict) -> Dict:
@@ -301,12 +304,12 @@ class CalendarSynchronizer:
 
     def _display_events_summary(self, events: List[Dict]) -> None:
         """Affiche un résumé des événements récupérés."""
-        print(f"📄 {len(events)} événements trouvés.\n")
+        logger.info(f"📄 {len(events)} événements trouvés.\n")
 
         for ev in events:
             if ev['all_day']:
-                print(f"📅 {ev['start'].date()} | {ev['subject']} | 💤 Journée entière")
+                logger.info(f"📅 {ev['start'].date()} | {ev['subject']} | 💤 Journée entière")
             else:
                 s_local = ev['start'].astimezone(pytz.timezone(self.timezone)).strftime('%d/%m %H:%M')
                 e_local = ev['end'].astimezone(pytz.timezone(self.timezone)).strftime('%H:%M')
-                print(f"🗓️ {s_local} → {e_local} | {ev['subject']} | 📍 {ev['location']}")
+                logger.info(f"🗓️ {s_local} → {e_local} | {ev['subject']} | 📍 {ev['location']}")
