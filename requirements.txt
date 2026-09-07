@@ -1,6 +1,12 @@
-exchangelib==4.9.0
-google-api-python-client==2.70.0
-google-auth-httplib2==0.1.0
-google-auth-oauthlib==1.0.0
-pytz==2022.7.1
-python-dotenv==1.0.0
+# Versions alignées sur l'environnement réellement en service.
+# ATTENTION : la synchronisation dépend d'un détail de sémantique d'exchangelib
+# (pour les journées entières, `start` et `end` sont INCLUSIFS et `end` est
+# décalé de -1 jour à la lecture — cf. src/exchange_service.py). Ne pas changer
+# de version majeure sans relancer test_exchange_service.py.
+exchangelib==5.2.1
+google-api-python-client==2.151.0
+google-auth-httplib2==0.2.0
+google-auth-oauthlib==1.2.1
+python-dotenv==1.2.1
+pytz==2024.1
+requests==2.32.5
