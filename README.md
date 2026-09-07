@@ -47,7 +47,17 @@ pip install -r requirements.txt
    TIMEZONE=Europe/Paris
    DAYS_AHEAD=60
    ENABLE_NOTIFICATIONS=true
+   HEALTHCHECK_URL=https://hc-ping.com/votre-uuid
+   VERIFY_SSL=true
+   CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
    ```
+
+    - `CA_BUNDLE` : à renseigner si le réseau passe par un proxy TLS d'entreprise
+      qui réémet les certificats. `requests` utilise par défaut le bundle de
+      `certifi`, qui ne contient pas les CA installées sur le système ; pointer
+      le magasin système permet de garder la vérification TLS **active**.
+    - `VERIFY_SSL=false` désactive complètement la vérification. À n'utiliser
+      qu'en dernier recours : préférer `CA_BUNDLE`.
     - Pour configurer l'accès à Google Calendar, suivez les instructions détaillées dans le fichier `GOOGLE_SETUP.md`
 
 ---
@@ -77,16 +87,22 @@ Pour exécuter les tests unitaires du projet :
 source venv/bin/activate
 ```
 
-2. Lancer les tests :
+2. Lancer toute la suite :
 ```bash
-python3 -m unittest test_exchange_sync.py
+python3 -m unittest discover -p "test_*.py"   # 51 tests
+./test_run_sync.sh                            # 7 tests du script de lancement
 ```
 
-Pour plus de détails et un affichage amélioré, vous pouvez utiliser pytest :
+Pour un seul module :
 ```bash
-pip install pytest
-pytest test_exchange_sync.py -v
+python3 -m unittest test_synchronizer -v
 ```
+
+⚠️ `test_exchange_service.py` verrouille un détail de sémantique d'exchangelib :
+pour les journées entières, `start` et `end` sont **inclusifs** et `end` est
+décalé de -1 jour à la lecture, alors que Google Calendar attend un `end`
+**exclusif**. Ne pas changer de version majeure d'exchangelib sans relancer ces
+tests.
 
 ---
 
@@ -116,8 +132,14 @@ Cette configuration lance la synchronisation à la 2ème minute de chaque heure 
 ## 📝 Fichiers du projet
 
 - `exchange_sync.py` - Script principal de synchronisation
-- `test_exchange_sync.py` - Tests unitaires
-- `run_sync.sh` - Script d'automatisation
+- `src/synchronizer.py` - Logique de rapprochement Exchange ↔ Google
+- `src/exchange_service.py` - Lecture Exchange, clé de synchro, cache d'endpoint
+- `src/google_service.py` - Authentification Google Calendar
+- `src/utils/retry_utils.py` - Réessai des erreurs réseau transitoires
+- `test_*.py` / `test_run_sync.sh` - Tests unitaires
+- `run_sync.sh` - Script d'automatisation (verrou + rotation du journal)
+- `.exchange_endpoint.json` - Endpoint EWS mémorisé (généré, ignoré par git)
+- `sync.log`, `sync.log.1`..`.5` - Journal et ses archives (5 Mo par génération)
 - `requirements.txt` - Dépendances Python
 - `.env` - Configuration (identifiants, etc.)
 - `GOOGLE_SETUP.md` - Guide de configuration de l'API Google Calendar
