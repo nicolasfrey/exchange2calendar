@@ -9,7 +9,7 @@ from unittest.mock import patch
 import requests
 
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
-from src.utils.healthchecks_utils import resolve_ssl_verify, send_healthcheck_ping
+from src.utils.healthchecks_utils import SESSION, resolve_ssl_verify, send_healthcheck_ping
 
 ENV = {"HEALTHCHECK_URL": "https://hc-ping.com/abc"}
 
@@ -46,7 +46,7 @@ class TestPingUsesResolvedVerify(unittest.TestCase):
     def test_ca_bundle_is_passed_to_requests(self):
         env = dict(ENV, CA_BUNDLE="/etc/ssl/certs/ca-certificates.crt")
         with patch.dict(os.environ, env, clear=True), \
-             patch.object(requests, 'get', return_value=FakeResponse()) as fake_get:
+             patch.object(SESSION, 'get', return_value=FakeResponse()) as fake_get:
             send_healthcheck_ping("start")
 
         self.assertEqual(fake_get.call_args.kwargs['verify'],
@@ -60,7 +60,7 @@ class TestPingRetries(unittest.TestCase):
         responses = [requests.ConnectionError("dns"), FakeResponse()]
         with patch.dict(os.environ, ENV, clear=True), \
              patch('src.utils.retry_utils.time.sleep'), \
-             patch.object(requests, 'get', side_effect=responses) as fake_get:
+             patch.object(SESSION, 'get', side_effect=responses) as fake_get:
             result = send_healthcheck_ping("start")
 
         self.assertTrue(result)
@@ -69,7 +69,7 @@ class TestPingRetries(unittest.TestCase):
     def test_returns_false_when_every_attempt_fails(self):
         with patch.dict(os.environ, ENV, clear=True), \
              patch('src.utils.retry_utils.time.sleep'), \
-             patch.object(requests, 'get', side_effect=requests.ConnectionError("dns")):
+             patch.object(SESSION, 'get', side_effect=requests.ConnectionError("dns")):
             result = send_healthcheck_ping("start")
 
         self.assertFalse(result)

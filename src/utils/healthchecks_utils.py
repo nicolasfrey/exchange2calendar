@@ -2,16 +2,39 @@
 
 import logging
 import os
+import ssl
 from typing import Optional, Union
 
 import requests
 import urllib3
+from requests.adapters import HTTPAdapter
 
 from src.utils.retry_utils import retry_call
 
 logger = logging.getLogger(__name__)
 
 PING_TIMEOUT = 10
+
+
+class _NonStrictX509Adapter(HTTPAdapter):
+    """Adaptateur HTTPS qui vérifie les certificats sans le mode X509 strict.
+
+    Depuis Python 3.13, `ssl.create_default_context()` active VERIFY_X509_STRICT,
+    qui rejette les certificats sans « Authority Key Identifier ». Ceux que
+    réémet le pare-feu Fortinet de l'entreprise n'en ont pas : sans cet
+    adaptateur, chaque ping échoue en « Missing Authority Key Identifier ».
+    La chaîne reste vérifiée contre `CA_BUNDLE` ; seul ce contrôle est levé.
+    """
+
+    def init_poolmanager(self, *args, **kwargs):
+        context = ssl.create_default_context()
+        context.verify_flags &= ~ssl.VERIFY_X509_STRICT
+        kwargs['ssl_context'] = context
+        return super().init_poolmanager(*args, **kwargs)
+
+
+SESSION = requests.Session()
+SESSION.mount('https://', _NonStrictX509Adapter())
 
 
 def resolve_ssl_verify() -> Union[bool, str]:
@@ -60,9 +83,9 @@ def send_healthcheck_ping(status: Optional[str] = None, message: Optional[str] =
 
     def ping():
         if message and status in ("fail", "success"):
-            return requests.post(url, data=message.encode('utf-8'),
-                                 timeout=PING_TIMEOUT, verify=verify)
-        return requests.get(url, timeout=PING_TIMEOUT, verify=verify)
+            return SESSION.post(url, data=message.encode('utf-8'),
+                                timeout=PING_TIMEOUT, verify=verify)
+        return SESSION.get(url, timeout=PING_TIMEOUT, verify=verify)
 
     try:
         # Idempotent : un ping rejoué ne fait qu'écraser le même état.
